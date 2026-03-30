@@ -110,10 +110,7 @@ export default function App() {
   const [newEvtLabel, setNewEvtLabel] = useState("");
   const [tasks, setTasks] = useState(CHECKLIST_ITEMS.map(t => ({ ...t, done: false })));
   const [newTask, setNewTask] = useState("");
-  const [expenses, setExpenses] = useState([
-    { name: "JR Pass x2", amt: 880, cat: "transport" },
-    { name: "Flights x2", amt: 2200, cat: "transport" },
-  ]);
+  const [expenses, setExpenses] = useState([]);
   const [expName, setExpName] = useState("");
   const [expAmt, setExpAmt] = useState("");
   const [expCat, setExpCat] = useState("food");
