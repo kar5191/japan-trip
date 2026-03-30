@@ -1,8 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import { createClient } from "@supabase/supabase-js";
 
+// ─── Supabase client ─────────────────────────────────────────────────────────
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
+
+// ─── Leaflet icon fix ─────────────────────────────────────────────────────────
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
@@ -10,132 +18,240 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
+// ─── Static data ──────────────────────────────────────────────────────────────
 const CITIES = [
-  { name: "Osaka", lat: 34.6937, lng: 135.5023, days: "Apr 1–4", emoji: "🏯", desc: "Dotonbori, street food capital, Osaka Castle" },
-  { name: "Kyoto", lat: 35.0116, lng: 135.7681, days: "Apr 5–8", emoji: "⛩️", desc: "Fushimi Inari, Arashiyama, Gion district" },
-  { name: "Kanazawa", lat: 36.5613, lng: 136.6562, days: "Apr 9–11", emoji: "🌸", desc: "Kenroku-en garden, samurai districts, fresh seafood" },
-  { name: "Hakone", lat: 35.2322, lng: 139.1069, days: "Apr 12–14", emoji: "🗻", desc: "Mt Fuji views, ryokan stay, onsen hot springs" },
-  { name: "Tokyo", lat: 35.6762, lng: 139.6503, days: "Apr 15–20", emoji: "🌆", desc: "Shibuya, Shinjuku, Asakusa, teamLab" },
+  { name: "Osaka",    lat: 34.6937, lng: 135.5023, days: "Apr 1–4",   emoji: "🏯", desc: "Dotonbori, street food capital, Osaka Castle" },
+  { name: "Kyoto",    lat: 35.0116, lng: 135.7681, days: "Apr 5–8",   emoji: "⛩️", desc: "Fushimi Inari, Arashiyama, Gion district" },
+  { name: "Kanazawa", lat: 36.5613, lng: 136.6562, days: "Apr 9–11",  emoji: "🌸", desc: "Kenroku-en garden, samurai districts, fresh seafood" },
+  { name: "Hakone",   lat: 35.2322, lng: 139.1069, days: "Apr 12–14", emoji: "🗻", desc: "Mt Fuji views, ryokan stay, onsen hot springs" },
+  { name: "Tokyo",    lat: 35.6762, lng: 139.6503, days: "Apr 15–20", emoji: "🌆", desc: "Shibuya, Shinjuku, Asakusa, teamLab" },
 ];
-
 const ROUTE = CITIES.map((c) => [c.lat, c.lng]);
 
-const CHECKLIST_ITEMS = [
-  { label: "Book flights", tag: "travel" },
-  { label: "Get JR Pass (order online before departure)", tag: "transport" },
-  { label: "Book all hotels/ryokan", tag: "lodging" },
-  { label: "Apply for IC Card (Suica)", tag: "transport" },
-  { label: "Get travel insurance", tag: "admin" },
-  { label: "Pocket WiFi or SIM card rental", tag: "gear" },
-  { label: "Notify bank of travel dates", tag: "admin" },
-  { label: "Download Google Maps offline — Japan", tag: "gear" },
-  { label: "Download Google Translate + Japanese pack", tag: "gear" },
-  { label: "Pack yen cash (Japan is still cash-heavy)", tag: "money" },
-  { label: "Book teamLab Planets tickets (sells out)", tag: "tokyo" },
-  { label: "Book Fushimi Inari early morning visit", tag: "kyoto" },
+// Default seeds — only used if Supabase has no data yet
+const DEFAULT_TASKS = [
+  { label: "Book flights",                                  tag: "travel",    done: false },
+  { label: "Get JR Pass (order online before departure)",   tag: "transport", done: false },
+  { label: "Book all hotels/ryokan",                        tag: "lodging",   done: false },
+  { label: "Apply for IC Card (Suica)",                     tag: "transport", done: false },
+  { label: "Get travel insurance",                          tag: "admin",     done: false },
+  { label: "Pocket WiFi or SIM card rental",                tag: "gear",      done: false },
+  { label: "Notify bank of travel dates",                   tag: "admin",     done: false },
+  { label: "Download Google Maps offline — Japan",          tag: "gear",      done: false },
+  { label: "Download Google Translate + Japanese pack",     tag: "gear",      done: false },
+  { label: "Pack yen cash (Japan is still cash-heavy)",     tag: "money",     done: false },
+  { label: "Book teamLab Planets tickets (sells out)",      tag: "tokyo",     done: false },
+  { label: "Book Fushimi Inari early morning visit",        tag: "kyoto",     done: false },
 ];
+const DEFAULT_EXPENSES  = [];
+const DEFAULT_EVENTS    = [
+  { day: 1,  label: "Arrive Osaka", color: "#D85A30" },
+  { day: 20, label: "Fly home",     color: "#888780" },
+];
+const DEFAULT_BUDGET    = 8000;
 
 const TIPS = [
-  { cat: "respect", title: "Bow as a greeting", body: "A slight bow (15°) is the standard greeting. Don't expect or initiate handshakes." },
-  { cat: "respect", title: "Remove shoes indoors", body: "Always remove shoes when entering homes, ryokans, and many traditional restaurants. Look for a step up at the entrance as a signal." },
-  { cat: "respect", title: "Quiet on public transport", body: "Trains are silent spaces. No phone calls, keep music inaudible, speak softly. It's genuinely observed, not just a rule." },
-  { cat: "food", title: "Say itadakimasu before eating", body: "It means roughly 'I humbly receive' — said before every meal. Gochisousama (go-chi-so-sa-ma) after. Locals will love that you know this." },
-  { cat: "food", title: "Don't tip — ever", body: "Tipping is considered rude in Japan. Service is included in the price and the staff take pride in doing it without extra payment." },
-  { cat: "food", title: "Slurping noodles is fine", body: "Slurping ramen or soba is totally normal and even signals you're enjoying the food." },
-  { cat: "money", title: "Carry cash", body: "Many restaurants, shrines, and small shops are cash-only. Convenience stores (7-Eleven, FamilyMart) have reliable ATMs that accept foreign cards." },
-  { cat: "onsen", title: "Onsen rules are strict", body: "Shower thoroughly before entering. Tattoos are often banned in public onsen — check ahead. No swimwear in traditional baths." },
-  { cat: "onsen", title: "Towels stay out of the water", body: "Your small towel can be folded on your head or left at the side — never in the communal water." },
-  { cat: "general", title: "Rubbish bins are rare", body: "Japan has almost no public bins yet is spotless. Carry a small bag for your trash and dispose at your hotel or a convenience store." },
-  { cat: "general", title: "Queuing is sacred", body: "Always queue in line — for trains, escalators (stand left, walk right in Tokyo), restaurants. Cutting in is a serious faux pas." },
-  { cat: "general", title: "Pointing is impolite", body: "Use an open hand to gesture toward something rather than pointing with a single finger." },
+  { cat: "respect", title: "Bow as a greeting",           body: "A slight bow (15°) is the standard greeting. Don't expect or initiate handshakes." },
+  { cat: "respect", title: "Remove shoes indoors",        body: "Always remove shoes when entering homes, ryokans, and many traditional restaurants. Look for a step up at the entrance as a signal." },
+  { cat: "respect", title: "Quiet on public transport",   body: "Trains are silent spaces. No phone calls, keep music inaudible, speak softly. It's genuinely observed, not just a rule." },
+  { cat: "food",    title: "Say itadakimasu before eating", body: "It means roughly 'I humbly receive' — said before every meal. Gochisousama (go-chi-so-sa-ma) after. Locals will love that you know this." },
+  { cat: "food",    title: "Don't tip — ever",            body: "Tipping is considered rude in Japan. Service is included in the price and the staff take pride in doing it without extra payment." },
+  { cat: "food",    title: "Slurping noodles is fine",    body: "Slurping ramen or soba is totally normal and even signals you're enjoying the food." },
+  { cat: "money",   title: "Carry cash",                  body: "Many restaurants, shrines, and small shops are cash-only. Convenience stores (7-Eleven, FamilyMart) have reliable ATMs that accept foreign cards." },
+  { cat: "onsen",   title: "Onsen rules are strict",      body: "Shower thoroughly before entering. Tattoos are often banned in public onsen — check ahead. No swimwear in traditional baths." },
+  { cat: "onsen",   title: "Towels stay out of the water", body: "Your small towel can be folded on your head or left at the side — never in the communal water." },
+  { cat: "general", title: "Rubbish bins are rare",       body: "Japan has almost no public bins yet is spotless. Carry a small bag for your trash and dispose at your hotel or a convenience store." },
+  { cat: "general", title: "Queuing is sacred",           body: "Always queue in line — for trains, escalators (stand left, walk right in Tokyo), restaurants. Cutting in is a serious faux pas." },
+  { cat: "general", title: "Pointing is impolite",        body: "Use an open hand to gesture toward something rather than pointing with a single finger." },
 ];
 
 const CAT_COLORS = {
   respect: { bg: "#FBEAF0", text: "#72243E", label: "respect" },
-  food: { bg: "#FAEEDA", text: "#633806", label: "food & drink" },
-  money: { bg: "#EAF3DE", text: "#27500A", label: "money" },
-  onsen: { bg: "#E6F1FB", text: "#0C447C", label: "onsen" },
+  food:    { bg: "#FAEEDA", text: "#633806", label: "food & drink" },
+  money:   { bg: "#EAF3DE", text: "#27500A", label: "money" },
+  onsen:   { bg: "#E6F1FB", text: "#0C447C", label: "onsen" },
   general: { bg: "#F1EFE8", text: "#444441", label: "general" },
 };
-
 const EXPENSE_CATS = ["transport", "food", "lodging", "activities", "shopping", "other"];
 const CAT_BAR_COLORS = {
   transport: "#378ADD", food: "#BA7517", lodging: "#7F77DD",
   activities: "#1D9E75", shopping: "#D4537E", other: "#888780",
 };
 
-const DEFAULT_EVENTS = [
-  { day: 4, label: "Arrive Osaka", color: "#D85A30" },
-  { day: 20, label: "Fly home", color: "#888780" },
-];
+// ─── Supabase helpers ─────────────────────────────────────────────────────────
 
+/**
+ * Load a key from planner_state. Returns the parsed value, or `fallback` if
+ * the row doesn't exist yet (first load). Also seeds the row on first load.
+ */
+async function loadOrSeed(key, fallback) {
+  const { data, error } = await supabase
+    .from("planner_state")
+    .select("value")
+    .eq("key", key)
+    .single();
+
+  if (error || !data) {
+    // Row doesn't exist — seed it
+    await supabase.from("planner_state").upsert({ key, value: fallback, updated_at: new Date().toISOString() });
+    return fallback;
+  }
+  return data.value;
+}
+
+/** Persist a value back to Supabase. */
+async function persist(key, value) {
+  await supabase
+    .from("planner_state")
+    .upsert({ key, value, updated_at: new Date().toISOString() });
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const s = {
-  app: { fontFamily: "'Georgia', serif", background: "#F5F0E8", minHeight: "100vh" },
-  header: { background: "#2C2416", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" },
-  logo: { fontSize: "20px", color: "#F5F0E8", fontWeight: "400", letterSpacing: "0.5px" },
-  logoSub: { fontSize: "12px", color: "#A89878", marginTop: "2px", fontFamily: "sans-serif" },
-  tabs: { display: "flex", gap: "4px", background: "#3D3020", borderRadius: "8px", padding: "3px" },
-  tab: { padding: "6px 14px", borderRadius: "6px", fontSize: "13px", cursor: "pointer", color: "#A89878", border: "none", background: "none", fontFamily: "sans-serif", transition: "all 0.15s" },
-  tabActive: { background: "#F5F0E8", color: "#2C2416", fontWeight: "500" },
-  content: { padding: "22px 24px" },
-  card: { background: "#FFFDF8", border: "0.5px solid #D4C9B0", borderRadius: "12px", padding: "18px 20px", marginBottom: "14px" },
-  cardTitle: { fontSize: "14px", fontWeight: "500", color: "#2C2416", marginBottom: "12px", fontFamily: "sans-serif" },
-  statGrid: { display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: "10px", marginBottom: "16px" },
-  stat: { background: "#EDE8DC", borderRadius: "8px", padding: "12px 14px" },
-  statVal: { fontSize: "22px", fontWeight: "500", color: "#2C2416", fontFamily: "sans-serif" },
-  statLabel: { fontSize: "12px", color: "#7A6E5F", marginTop: "2px", fontFamily: "sans-serif" },
-  taskRow: { display: "flex", alignItems: "center", gap: "10px", padding: "8px 0", borderBottom: "0.5px solid #E8E0D0", cursor: "pointer" },
-  cb: { width: "16px", height: "16px", borderRadius: "4px", border: "1px solid #B8AD9A", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" },
-  cbOn: { background: "#5C7A3E", borderColor: "#5C7A3E" },
-  tag: { fontSize: "11px", color: "#7A6E5F", background: "#EDE8DC", padding: "2px 7px", borderRadius: "99px", whiteSpace: "nowrap", fontFamily: "sans-serif" },
-  addRow: { display: "flex", gap: "8px", marginTop: "12px" },
-  input: { flex: 1, padding: "8px 10px", border: "0.5px solid #C8BFAA", borderRadius: "8px", fontSize: "13px", background: "#FFFDF8", color: "#2C2416", fontFamily: "sans-serif" },
-  btn: { padding: "8px 14px", border: "0.5px solid #C8BFAA", borderRadius: "8px", fontSize: "13px", cursor: "pointer", background: "#FFFDF8", color: "#2C2416", fontFamily: "sans-serif" },
-  btnPrimary: { background: "#5C7A3E", color: "white", border: "none" },
-  twoCol: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" },
-  tipCard: { background: "#FFFDF8", border: "0.5px solid #D4C9B0", borderRadius: "10px", padding: "14px 16px", marginBottom: "10px" },
-  tipTitle: { fontSize: "14px", fontWeight: "500", color: "#2C2416", marginBottom: "4px", fontFamily: "sans-serif" },
-  tipBody: { fontSize: "13px", color: "#5C5347", lineHeight: "1.6", fontFamily: "sans-serif" },
-  calGrid: { display: "grid", gridTemplateColumns: "repeat(7, minmax(0,1fr))", gap: "4px" },
-  calDay: { background: "#FFFDF8", border: "0.5px solid #D4C9B0", borderRadius: "6px", padding: "6px", minHeight: "58px", fontSize: "12px", fontFamily: "sans-serif" },
-  calDayNum: { fontWeight: "500", color: "#2C2416", marginBottom: "3px", fontSize: "13px" },
+  app:         { fontFamily: "'Georgia', serif", background: "#F5F0E8", minHeight: "100vh" },
+  header:      { background: "#2C2416", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" },
+  logo:        { fontSize: "20px", color: "#F5F0E8", fontWeight: "400", letterSpacing: "0.5px" },
+  logoSub:     { fontSize: "12px", color: "#A89878", marginTop: "2px", fontFamily: "sans-serif" },
+  syncDot:     { width: "7px", height: "7px", borderRadius: "50%", display: "inline-block", marginRight: "5px" },
+  syncLabel:   { fontSize: "11px", fontFamily: "sans-serif", display: "flex", alignItems: "center" },
+  tabs:        { display: "flex", gap: "4px", background: "#3D3020", borderRadius: "8px", padding: "3px" },
+  tab:         { padding: "6px 14px", borderRadius: "6px", fontSize: "13px", cursor: "pointer", color: "#A89878", border: "none", background: "none", fontFamily: "sans-serif", transition: "all 0.15s" },
+  tabActive:   { background: "#F5F0E8", color: "#2C2416", fontWeight: "500" },
+  content:     { padding: "22px 24px" },
+  card:        { background: "#FFFDF8", border: "0.5px solid #D4C9B0", borderRadius: "12px", padding: "18px 20px", marginBottom: "14px" },
+  cardTitle:   { fontSize: "14px", fontWeight: "500", color: "#2C2416", marginBottom: "12px", fontFamily: "sans-serif" },
+  statGrid:    { display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: "10px", marginBottom: "16px" },
+  stat:        { background: "#EDE8DC", borderRadius: "8px", padding: "12px 14px" },
+  statVal:     { fontSize: "22px", fontWeight: "500", color: "#2C2416", fontFamily: "sans-serif" },
+  statLabel:   { fontSize: "12px", color: "#7A6E5F", marginTop: "2px", fontFamily: "sans-serif" },
+  taskRow:     { display: "flex", alignItems: "center", gap: "10px", padding: "8px 0", borderBottom: "0.5px solid #E8E0D0", cursor: "pointer" },
+  cb:          { width: "16px", height: "16px", borderRadius: "4px", border: "1px solid #B8AD9A", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" },
+  cbOn:        { background: "#5C7A3E", borderColor: "#5C7A3E" },
+  tag:         { fontSize: "11px", color: "#7A6E5F", background: "#EDE8DC", padding: "2px 7px", borderRadius: "99px", whiteSpace: "nowrap", fontFamily: "sans-serif" },
+  addRow:      { display: "flex", gap: "8px", marginTop: "12px" },
+  input:       { flex: 1, padding: "8px 10px", border: "0.5px solid #C8BFAA", borderRadius: "8px", fontSize: "13px", background: "#FFFDF8", color: "#2C2416", fontFamily: "sans-serif" },
+  btn:         { padding: "8px 14px", border: "0.5px solid #C8BFAA", borderRadius: "8px", fontSize: "13px", cursor: "pointer", background: "#FFFDF8", color: "#2C2416", fontFamily: "sans-serif" },
+  btnPrimary:  { background: "#5C7A3E", color: "white", border: "none" },
+  twoCol:      { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" },
+  tipCard:     { background: "#FFFDF8", border: "0.5px solid #D4C9B0", borderRadius: "10px", padding: "14px 16px", marginBottom: "10px" },
+  tipTitle:    { fontSize: "14px", fontWeight: "500", color: "#2C2416", marginBottom: "4px", fontFamily: "sans-serif" },
+  tipBody:     { fontSize: "13px", color: "#5C5347", lineHeight: "1.6", fontFamily: "sans-serif" },
+  calGrid:     { display: "grid", gridTemplateColumns: "repeat(7, minmax(0,1fr))", gap: "4px" },
+  calDay:      { background: "#FFFDF8", border: "0.5px solid #D4C9B0", borderRadius: "6px", padding: "6px", minHeight: "58px", fontSize: "12px", fontFamily: "sans-serif" },
+  calDayNum:   { fontWeight: "500", color: "#2C2416", marginBottom: "3px", fontSize: "13px" },
   calDayBlank: { background: "transparent", border: "none", minHeight: "58px" },
-  cityCard: { background: "#FFFDF8", border: "0.5px solid #D4C9B0", borderRadius: "10px", padding: "12px 14px", marginBottom: "8px", display: "flex", gap: "12px", alignItems: "flex-start" },
+  cityCard:    { background: "#FFFDF8", border: "0.5px solid #D4C9B0", borderRadius: "10px", padding: "12px 14px", marginBottom: "8px", display: "flex", gap: "12px", alignItems: "flex-start" },
 };
 
+// ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [tab, setTab] = useState("map");
-  const [events, setEvents] = useState(DEFAULT_EVENTS);
-  const [newEvtDay, setNewEvtDay] = useState("");
+  const [tab, setTab]           = useState("map");
+  const [ready, setReady]       = useState(false);   // true once initial load done
+  const [syncStatus, setSyncStatus] = useState("synced"); // "synced" | "saving" | "error"
+
+  // Persisted state
+  const [tasks,    setTasksRaw]    = useState([]);
+  const [expenses, setExpensesRaw] = useState([]);
+  const [events,   setEventsRaw]   = useState([]);
+  const [budget,   setBudgetRaw]   = useState(DEFAULT_BUDGET);
+
+  // Transient UI state
+  const [newTask,     setNewTask]     = useState("");
+  const [expName,     setExpName]     = useState("");
+  const [expAmt,      setExpAmt]      = useState("");
+  const [expCat,      setExpCat]      = useState("food");
+  const [newEvtDay,   setNewEvtDay]   = useState("");
   const [newEvtLabel, setNewEvtLabel] = useState("");
-  const [tasks, setTasks] = useState(CHECKLIST_ITEMS.map(t => ({ ...t, done: false })));
-  const [newTask, setNewTask] = useState("");
-  const [expenses, setExpenses] = useState([]);
-  const [expName, setExpName] = useState("");
-  const [expAmt, setExpAmt] = useState("");
-  const [expCat, setExpCat] = useState("food");
-  const [budget, setBudget] = useState(8000);
-  const [tipFilter, setTipFilter] = useState("all");
+  const [tipFilter,   setTipFilter]   = useState("all");
 
-  const totalSpent = expenses.reduce((s, e) => s + e.amt, 0);
+  // Track whether changes originated locally (to avoid re-applying our own realtime echo)
+  const localWrite = useRef(false);
 
+  // ── Persist helpers (wrap raw setters) ──────────────────────────────────────
+  async function save(key, value) {
+    setSyncStatus("saving");
+    localWrite.current = true;
+    try {
+      await persist(key, value);
+      setSyncStatus("synced");
+    } catch {
+      setSyncStatus("error");
+    }
+  }
+
+  function setTasks(v)    { setTasksRaw(v);    save("tasks", v); }
+  function setExpenses(v) { setExpensesRaw(v); save("expenses", v); }
+  function setEvents(v)   { setEventsRaw(v);   save("events", v); }
+  function setBudget(v)   { setBudgetRaw(v);   save("budget", v); }
+
+  // ── Initial load ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    async function bootstrap() {
+      const [t, e, ev, b] = await Promise.all([
+        loadOrSeed("tasks",    DEFAULT_TASKS),
+        loadOrSeed("expenses", DEFAULT_EXPENSES),
+        loadOrSeed("events",   DEFAULT_EVENTS),
+        loadOrSeed("budget",   DEFAULT_BUDGET),
+      ]);
+      setTasksRaw(t);
+      setExpensesRaw(e);
+      setEventsRaw(ev);
+      setBudgetRaw(b);
+      setReady(true);
+    }
+    bootstrap();
+  }, []);
+
+  // ── Realtime subscription ────────────────────────────────────────────────────
+  useEffect(() => {
+    const channel = supabase
+      .channel("planner_state_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "planner_state" },
+        (payload) => {
+          // If this change came from us, skip it
+          if (localWrite.current) {
+            localWrite.current = false;
+            return;
+          }
+          const { key, value } = payload.new;
+          if (key === "tasks")    setTasksRaw(value);
+          if (key === "expenses") setExpensesRaw(value);
+          if (key === "events")   setEventsRaw(value);
+          if (key === "budget")   setBudgetRaw(value);
+        }
+      )
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, []);
+
+  // ── Derived values ────────────────────────────────────────────────────────────
+  const totalSpent   = expenses.reduce((s, e) => s + e.amt, 0);
+  const catTotals    = EXPENSE_CATS
+    .map(cat => ({ cat, total: expenses.filter(e => e.cat === cat).reduce((s, e) => s + e.amt, 0) }))
+    .filter(c => c.total > 0);
+  const filteredTips = tipFilter === "all" ? TIPS : TIPS.filter(t => t.cat === tipFilter);
+
+  const DAYS_IN_APRIL = 30;
+  const FIRST_DOW     = new Date(2026, 3, 1).getDay();
+
+  // ── Actions ───────────────────────────────────────────────────────────────────
   function toggleTask(i) {
     setTasks(tasks.map((t, idx) => idx === i ? { ...t, done: !t.done } : t));
   }
-
   function addTask() {
     if (!newTask.trim()) return;
     setTasks([...tasks, { label: newTask.trim(), tag: "other", done: false }]);
     setNewTask("");
   }
-
   function addExpense() {
     const amt = parseFloat(expAmt);
     if (!expName.trim() || !amt) return;
     setExpenses([...expenses, { name: expName.trim(), amt, cat: expCat }]);
     setExpName(""); setExpAmt("");
   }
-
   function addEvent() {
     const day = parseInt(newEvtDay);
     if (!day || !newEvtLabel.trim()) return;
@@ -143,15 +259,23 @@ export default function App() {
     setNewEvtDay(""); setNewEvtLabel("");
   }
 
-  const catTotals = EXPENSE_CATS.map(cat => ({
-    cat, total: expenses.filter(e => e.cat === cat).reduce((s, e) => s + e.amt, 0)
-  })).filter(c => c.total > 0);
+  // ── Sync status indicator ─────────────────────────────────────────────────────
+  const syncDotColor = { synced: "#5C7A3E", saving: "#BA7517", error: "#C0392B" }[syncStatus];
+  const syncText     = { synced: "synced", saving: "saving…", error: "sync error" }[syncStatus];
 
-  const filteredTips = tipFilter === "all" ? TIPS : TIPS.filter(t => t.cat === tipFilter);
+  // ── Loading state ─────────────────────────────────────────────────────────────
+  if (!ready) {
+    return (
+      <div style={{ ...s.app, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ textAlign: "center", color: "#7A6E5F", fontFamily: "sans-serif", fontSize: "14px" }}>
+          <div style={{ fontSize: "28px", marginBottom: "12px" }}>🗾</div>
+          Loading your planner…
+        </div>
+      </div>
+    );
+  }
 
-  const DAYS_IN_APRIL = 30;
-  const FIRST_DOW = new Date(2026, 3, 1).getDay();
-
+  // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div style={s.app}>
       <div style={s.header}>
@@ -159,22 +283,36 @@ export default function App() {
           <div style={s.logo}>Japan April 2026</div>
           <div style={s.logoSub}>Osaka → Kyoto → Kanazawa → Hakone → Tokyo</div>
         </div>
-        <div style={s.tabs}>
-          {["map", "checklist", "budget", "tips", "calendar"].map(t => (
-            <button key={t} style={tab === t ? { ...s.tab, ...s.tabActive } : s.tab} onClick={() => setTab(t)}>{t}</button>
-          ))}
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          {/* Sync status pill */}
+          <div style={{ ...s.syncLabel, color: syncDotColor }}>
+            <span style={{ ...s.syncDot, background: syncDotColor }} />
+            {syncText}
+          </div>
+          <div style={s.tabs}>
+            {["map", "checklist", "budget", "tips", "calendar"].map(t => (
+              <button
+                key={t}
+                style={tab === t ? { ...s.tab, ...s.tabActive } : s.tab}
+                onClick={() => setTab(t)}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       <div style={s.content}>
 
+        {/* ── Map ── */}
         {tab === "map" && (
           <div>
             <div style={{ ...s.card, padding: "0", overflow: "hidden", marginBottom: "14px" }}>
               <MapContainer center={[35.8, 136.5]} zoom={6} style={{ height: "380px", width: "100%" }} scrollWheelZoom={false}>
                 <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" attribution="© OpenStreetMap © CARTO" />
                 <Polyline positions={ROUTE} color="#8B6914" weight={2} dashArray="6,6" />
-                {CITIES.map((c, i) => (
+                {CITIES.map((c) => (
                   <Marker key={c.name} position={[c.lat, c.lng]}>
                     <Popup><strong>{c.emoji} {c.name}</strong><br />{c.days}<br />{c.desc}</Popup>
                   </Marker>
@@ -186,7 +324,9 @@ export default function App() {
                 <div key={c.name} style={s.cityCard}>
                   <div style={{ fontSize: "24px" }}>{c.emoji}</div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: "15px", fontWeight: "500", color: "#2C2416", fontFamily: "sans-serif" }}>{c.name} <span style={{ fontSize: "12px", color: "#7A6E5F", fontWeight: "400" }}>{c.days}</span></div>
+                    <div style={{ fontSize: "15px", fontWeight: "500", color: "#2C2416", fontFamily: "sans-serif" }}>
+                      {c.name} <span style={{ fontSize: "12px", color: "#7A6E5F", fontWeight: "400" }}>{c.days}</span>
+                    </div>
                     <div style={{ fontSize: "13px", color: "#5C5347", marginTop: "3px", fontFamily: "sans-serif" }}>{c.desc}</div>
                   </div>
                   <div style={{ fontSize: "13px", fontWeight: "500", color: "#7A6E5F", fontFamily: "sans-serif" }}>stop {i + 1}</div>
@@ -196,21 +336,30 @@ export default function App() {
           </div>
         )}
 
+        {/* ── Checklist ── */}
         {tab === "checklist" && (
           <div style={s.twoCol}>
             <div style={s.card}>
               <div style={s.cardTitle}>pre-trip checklist</div>
               {tasks.map((t, i) => (
-                <div key={i} style={{ ...s.taskRow, borderBottom: i === tasks.length - 1 ? "none" : "0.5px solid #E8E0D0" }} onClick={() => toggleTask(i)}>
+                <div
+                  key={i}
+                  style={{ ...s.taskRow, borderBottom: i === tasks.length - 1 ? "none" : "0.5px solid #E8E0D0" }}
+                  onClick={() => toggleTask(i)}
+                >
                   <div style={{ ...s.cb, ...(t.done ? s.cbOn : {}) }}>
-                    {t.done && <svg width="9" height="7" viewBox="0 0 9 7"><polyline points="1,3.5 3.5,6 8,1" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                    {t.done && (
+                      <svg width="9" height="7" viewBox="0 0 9 7">
+                        <polyline points="1,3.5 3.5,6 8,1" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
                   </div>
                   <div style={{ flex: 1, fontSize: "13px", color: t.done ? "#A89878" : "#2C2416", textDecoration: t.done ? "line-through" : "none", fontFamily: "sans-serif" }}>{t.label}</div>
                   <div style={s.tag}>{t.tag}</div>
                 </div>
               ))}
               <div style={s.addRow}>
-                <input style={s.input} value={newTask} onChange={e => setNewTask(e.target.value)} placeholder="add a task..." onKeyDown={e => e.key === "Enter" && addTask()} />
+                <input style={s.input} value={newTask} onChange={e => setNewTask(e.target.value)} placeholder="add a task…" onKeyDown={e => e.key === "Enter" && addTask()} />
                 <button style={{ ...s.btn, ...s.btnPrimary }} onClick={addTask}>add</button>
               </div>
             </div>
@@ -234,19 +383,22 @@ export default function App() {
                   "Ryokans often require early booking especially in cherry blossom season",
                   "IC cards (Suica) can now be added to Apple/Google Wallet",
                 ].map((r, i) => (
-                  <div key={i} style={{ fontSize: "13px", color: "#5C5347", padding: "7px 0", borderBottom: i === 3 ? "none" : "0.5px solid #E8E0D0", fontFamily: "sans-serif", lineHeight: "1.5" }}>⚠ {r}</div>
+                  <div key={i} style={{ fontSize: "13px", color: "#5C5347", padding: "7px 0", borderBottom: i === 3 ? "none" : "0.5px solid #E8E0D0", fontFamily: "sans-serif", lineHeight: "1.5" }}>
+                    ⚠ {r}
+                  </div>
                 ))}
               </div>
             </div>
           </div>
         )}
 
+        {/* ── Budget ── */}
         {tab === "budget" && (
           <div>
             <div style={s.statGrid}>
+              <div style={s.stat}><div style={s.statVal}>${budget.toLocaleString()}</div><div style={s.statLabel}>budget</div></div>
               <div style={s.stat}><div style={s.statVal}>${totalSpent.toLocaleString()}</div><div style={s.statLabel}>total spent</div></div>
               <div style={s.stat}><div style={s.statVal}>${(budget - totalSpent).toLocaleString()}</div><div style={s.statLabel}>remaining</div></div>
-              <div style={s.stat}><div style={s.statVal}>{Math.min(100, Math.round(totalSpent / budget * 100))}%</div><div style={s.statLabel}>of budget used</div></div>
             </div>
             <div style={{ height: "6px", background: "#EDE8DC", borderRadius: "99px", overflow: "hidden", marginBottom: "16px" }}>
               <div style={{ height: "100%", width: `${Math.min(100, Math.round(totalSpent / budget * 100))}%`, background: totalSpent > budget ? "#C0392B" : "#5C7A3E", borderRadius: "99px" }} />
@@ -275,7 +427,12 @@ export default function App() {
               <div style={s.card}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
                   <div style={s.cardTitle}>total budget ($)</div>
-                  <input style={{ ...s.input, width: "100px", flex: "none", textAlign: "right" }} type="number" value={budget} onChange={e => setBudget(Number(e.target.value))} />
+                  <input
+                    style={{ ...s.input, width: "100px", flex: "none", textAlign: "right" }}
+                    type="number"
+                    value={budget}
+                    onChange={e => setBudget(Number(e.target.value))}
+                  />
                 </div>
                 {catTotals.map(c => (
                   <div key={c.cat} style={{ marginBottom: "12px" }}>
@@ -292,6 +449,7 @@ export default function App() {
           </div>
         )}
 
+        {/* ── Tips ── */}
         {tab === "tips" && (
           <div>
             <div style={{ display: "flex", gap: "6px", marginBottom: "16px", flexWrap: "wrap" }}>
@@ -303,7 +461,9 @@ export default function App() {
               {filteredTips.map((t, i) => (
                 <div key={i} style={{ ...s.tipCard, breakInside: "avoid", marginBottom: "10px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                    <div style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "99px", background: CAT_COLORS[t.cat]?.bg, color: CAT_COLORS[t.cat]?.text, fontFamily: "sans-serif", fontWeight: "500", whiteSpace: "nowrap" }}>{CAT_COLORS[t.cat]?.label}</div>
+                    <div style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "99px", background: CAT_COLORS[t.cat]?.bg, color: CAT_COLORS[t.cat]?.text, fontFamily: "sans-serif", fontWeight: "500", whiteSpace: "nowrap" }}>
+                      {CAT_COLORS[t.cat]?.label}
+                    </div>
                     <div style={s.tipTitle}>{t.title}</div>
                   </div>
                   <div style={s.tipBody}>{t.body}</div>
@@ -313,6 +473,7 @@ export default function App() {
           </div>
         )}
 
+        {/* ── Calendar ── */}
         {tab === "calendar" && (
           <div style={s.card}>
             <div style={{ ...s.cardTitle, marginBottom: "16px" }}>April 2026</div>
