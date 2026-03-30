@@ -20,11 +20,11 @@ L.Icon.Default.mergeOptions({
 
 // ─── Static data ──────────────────────────────────────────────────────────────
 const CITIES = [
-  { name: "Osaka",    lat: 34.6937, lng: 135.5023, days: "Apr 1–4",   emoji: "🏯", desc: "Dotonbori, street food capital, Osaka Castle" },
-  { name: "Kyoto",    lat: 35.0116, lng: 135.7681, days: "Apr 5–8",   emoji: "⛩️", desc: "Fushimi Inari, Arashiyama, Gion district" },
-  { name: "Kanazawa", lat: 36.5613, lng: 136.6562, days: "Apr 9–11",  emoji: "🌸", desc: "Kenroku-en garden, samurai districts, fresh seafood" },
-  { name: "Hakone",   lat: 35.2322, lng: 139.1069, days: "Apr 12–14", emoji: "🗻", desc: "Mt Fuji views, ryokan stay, onsen hot springs" },
-  { name: "Tokyo",    lat: 35.6762, lng: 139.6503, days: "Apr 15–20", emoji: "🌆", desc: "Shibuya, Shinjuku, Asakusa, teamLab" },
+  { name: "Osaka",    lat: 34.6937, lng: 135.5023, days: "Apr 4–8",   emoji: "🏯", desc: "Dotonbori, street food capital, Osaka Castle" },
+  { name: "Kyoto",    lat: 35.0116, lng: 135.7681, days: "Apr 8-11",   emoji: "⛩️", desc: "Fushimi Inari, Arashiyama, Gion district" },
+  { name: "Kanazawa", lat: 36.5613, lng: 136.6562, days: "Apr 11–14",  emoji: "🌸", desc: "Kenroku-en garden, samurai districts, fresh seafood" },
+  { name: "Hakone",   lat: 35.2322, lng: 139.1069, days: "Apr 14–17", emoji: "🗻", desc: "Mt Fuji views, ryokan stay, onsen hot springs" },
+  { name: "Tokyo",    lat: 35.6762, lng: 139.6503, days: "Apr 17–20", emoji: "🌆", desc: "Shibuya, Shinjuku, Asakusa, teamLab" },
 ];
 const ROUTE = CITIES.map((c) => [c.lat, c.lng]);
 
@@ -45,7 +45,7 @@ const DEFAULT_TASKS = [
 ];
 const DEFAULT_EXPENSES  = [];
 const DEFAULT_EVENTS    = [
-  { day: 1,  label: "Arrive Osaka", color: "#D85A30" },
+  { day: 4,  label: "Arrive Osaka", color: "#D85A30" },
   { day: 20, label: "Fly home",     color: "#888780" },
 ];
 const DEFAULT_BUDGET    = 8000;
@@ -487,7 +487,7 @@ export default function App() {
               {Array(DAYS_IN_APRIL).fill(null).map((_, i) => {
                 const day = i + 1;
                 const evt = events.find(e => e.day === day);
-                const inTrip = day >= 1 && day <= 20;
+                const inTrip = day >= 4 && day <= 20;
                 return (
                   <div key={day} style={{ ...s.calDay, background: inTrip ? "#FFF8EE" : "#FFFDF8", border: inTrip ? "0.5px solid #D4B870" : "0.5px solid #D4C9B0" }}>
                     <div style={{ ...s.calDayNum, color: inTrip ? "#8B6914" : "#2C2416" }}>{day}</div>
@@ -498,7 +498,7 @@ export default function App() {
             </div>
             <div style={{ marginTop: "14px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
               <div style={{ fontSize: "12px", color: "#7A6E5F", fontFamily: "sans-serif", display: "flex", alignItems: "center", gap: "5px" }}>
-                <div style={{ width: "12px", height: "12px", background: "#FFF8EE", border: "0.5px solid #D4B870", borderRadius: "3px" }} /> trip days (Apr 1–20)
+                <div style={{ width: "12px", height: "12px", background: "#FFF8EE", border: "0.5px solid #D4B870", borderRadius: "3px" }} /> trip days (Apr 4–20)
               </div>
             </div>
             <div style={{ marginTop: "16px", display: "flex", gap: "8px", alignItems: "center" }}>
